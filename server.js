@@ -509,7 +509,7 @@ function cleanupAfterDownload(downloadId, tempFiles = []) {
 }
 
 const app = express();
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 
 // Clean up old temp files on server startup
 console.log('Starting server cleanup...');
