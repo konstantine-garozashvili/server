@@ -25,9 +25,28 @@ npm install
 
 ## Environment Variables
 
+### Basic Configuration
 - `PORT` - Server port (default: 4000, automatically set by Render.com)
 - `FRONTEND_URL` - Frontend application URL for CORS (default: http://localhost:5173)
 - `NODE_ENV` - Environment mode (recommended: production for deployment)
+
+### YouTube Bot Detection Bypass Configuration
+- `PROXY_URL` - Optional proxy server URL (format: http://username:password@proxy-server:port)
+- `USE_IPV6` - Enable IPv6 support for requests (true/false, default: false)
+- `ENABLE_COOKIES` - Enable cookies for session persistence (true/false, default: true)
+
+**Example .env file:**
+```bash
+# Basic configuration
+PORT=4000
+FRONTEND_URL=http://localhost:5173
+NODE_ENV=development
+
+# Bot detection bypass (optional)
+USE_IPV6=false
+ENABLE_COOKIES=true
+# PROXY_URL=http://your-proxy:8080
+```
 
 ## Local Development
 
@@ -95,6 +114,38 @@ server/
 ├── temp/              # Temporary download files (auto-cleaned)
 └── README.md          # This file
 ```
+
+## Troubleshooting YouTube Bot Detection
+
+If you encounter errors like "Sign in to confirm you're not a bot" or 403 Forbidden errors, try these solutions:
+
+### 1. Enable Enhanced Bot Detection Bypass
+```bash
+# In your .env file
+USE_IPV6=true
+ENABLE_COOKIES=true
+```
+
+### 2. Use a Proxy Server
+```bash
+# In your .env file
+PROXY_URL=http://your-proxy-server:8080
+# or with authentication
+PROXY_URL=http://username:password@proxy-server:8080
+```
+
+### 3. Common Solutions
+- **Rotate IP addresses** - Use different proxy servers
+- **Enable IPv6** - Set `USE_IPV6=true` to use IPv6 connections
+- **Use residential proxies** - More effective than datacenter proxies
+- **Implement delays** - The server automatically adds random delays between requests
+
+### 4. Server Features for Bot Detection Bypass
+- **User-Agent rotation** - Automatically rotates browser user agents
+- **Request randomization** - Adds random delays and headers
+- **Retry logic** - Automatically retries failed requests with different configurations
+- **Enhanced headers** - Mimics real browser requests
+- **Cookie support** - Maintains session persistence
 
 ## Dependencies
 

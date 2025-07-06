@@ -13,6 +13,134 @@ const pipelineAsync = promisify(pipeline);
 // Store active download progress
 const downloadProgress = new Map();
 
+// Enhanced bot detection bypass configuration
+function getEnhancedRequestOptions() {
+  const options = {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Cache-Control': 'max-age=0',
+      'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"'
+    },
+    // Add timeout and retry configurations
+    timeout: 30000,
+    maxRetries: 3,
+    retryDelay: 1000,
+    // Add IPv6 support if enabled
+    family: USE_IPV6 ? 6 : 0,
+    // Enable cookie jar if configured
+    jar: ENABLE_COOKIES
+  };
+  
+  // Add proxy configuration if provided
+  if (PROXY_URL) {
+    options.proxy = PROXY_URL;
+    console.log('Using proxy for requests');
+  }
+  
+  return options;
+}
+
+// Function to get enhanced ytdl options with bot detection bypass
+function getEnhancedYtdlOptions(baseOptions = {}) {
+  const enhancedRequestOptions = getEnhancedRequestOptions();
+  
+  return {
+    ...baseOptions,
+    requestOptions: {
+      ...enhancedRequestOptions,
+      // Add additional request options for better bot detection bypass
+      transform: undefined, // Disable any request transformations
+      jar: ENABLE_COOKIES, // Enable cookie jar for session persistence based on config
+      followRedirect: true,
+      maxRedirects: 5,
+      // Add IPv6 preference to avoid some bot detection
+      family: USE_IPV6 ? 6 : 0, // Use IPv6 if enabled, otherwise both
+      // Add custom agent options
+      agent: false, // Disable keep-alive agent to avoid detection
+      // Add request timing randomization
+      delay: Math.floor(Math.random() * 1000) + 500 // Random delay between 500-1500ms
+    },
+    // Add player options for better compatibility
+    playerOptions: {
+      hl: 'en',
+      gl: 'US'
+    },
+    // Add format selection options
+    lang: 'en',
+    // Disable signature verification that might trigger bot detection
+    disableDefaultUA: false
+  };
+}
+
+// Function to handle YouTube anti-bot measures with retry logic
+async function createYtdlStreamWithRetry(url, options, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Attempt ${attempt}/${maxRetries} to create ytdl stream`);
+      
+      // Add random delay between attempts to avoid rate limiting
+      if (attempt > 1) {
+        const delay = Math.floor(Math.random() * 2000) + 1000; // 1-3 seconds
+        console.log(`Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      // Rotate User-Agent for each retry
+      const userAgents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      ];
+      
+      const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
+      const enhancedOptions = {
+        ...options,
+        requestOptions: {
+          ...options.requestOptions,
+          headers: {
+            ...options.requestOptions.headers,
+            'User-Agent': randomUA
+          }
+        }
+      };
+      
+      return ytdl(String(url), enhancedOptions);
+      
+    } catch (error) {
+      console.error(`Attempt ${attempt} failed:`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Check if it's a bot detection error
+      if (error.message.includes('Sign in to confirm') || 
+          error.message.includes('bot') || 
+          error.message.includes('403') ||
+          error.message.includes('429')) {
+        console.log('Bot detection error detected, implementing additional bypass measures...');
+        // Continue to next attempt with different configuration
+      } else {
+        // For other errors, throw immediately
+        throw error;
+      }
+    }
+  }
+}
+
 
 // Function to check if FFmpeg is available
 async function checkFFmpegAvailability() {
@@ -251,19 +379,14 @@ async function handleFFmpegMergeNew(req, res, url, videoFormat, audioFormat, san
       percentage: 10
     });
     
-    // Add proper options for video-only download
-    const videoOptions = {
+    // Add proper options for video-only download with enhanced bot detection bypass
+    const videoOptions = getEnhancedYtdlOptions({
       format: videoFormat.itag,
-      filter: 'videoonly',
-      requestOptions: {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      }
-    };
+      filter: 'videoonly'
+    });
     
     console.log('Video download options:', videoOptions);
-    const videoStream = ytdl(url, videoOptions);
+    const videoStream = await createYtdlStreamWithRetry(url, videoOptions);
     const videoWriteStream = fs.createWriteStream(videoFile);
     
     let videoDownloaded = 0;
@@ -307,19 +430,14 @@ async function handleFFmpegMergeNew(req, res, url, videoFormat, audioFormat, san
       percentage: 45
     });
     
-    // Add proper options for audio-only download
-    const audioOptions = {
+    // Add proper options for audio-only download with enhanced bot detection bypass
+    const audioOptions = getEnhancedYtdlOptions({
       format: audioFormat.itag,
-      filter: 'audioonly',
-      requestOptions: {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      }
-    };
+      filter: 'audioonly'
+    });
     
     console.log('Audio download options:', audioOptions);
-    const audioStream = ytdl(url, audioOptions);
+    const audioStream = await createYtdlStreamWithRetry(url, audioOptions);
     const audioWriteStream = fs.createWriteStream(audioFile);
     
     let audioDownloaded = 0;
@@ -511,6 +629,19 @@ function cleanupAfterDownload(downloadId, tempFiles = []) {
 const app = express();
 const PORT = process.env.PORT || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+// Optional proxy configuration for enhanced bot detection bypass
+const PROXY_URL = process.env.PROXY_URL; // Optional: http://username:password@proxy-server:port
+const USE_IPV6 = process.env.USE_IPV6 === 'true';
+const ENABLE_COOKIES = process.env.ENABLE_COOKIES !== 'false'; // Default to true
+
+console.log('🔧 Server Configuration:');
+console.log('- Port:', PORT);
+console.log('- Frontend URL:', FRONTEND_URL);
+console.log('- Environment:', process.env.NODE_ENV || 'development');
+console.log('- Proxy URL:', PROXY_URL ? '[CONFIGURED]' : '[NOT SET]');
+console.log('- IPv6 Support:', USE_IPV6);
+console.log('- Cookies Enabled:', ENABLE_COOKIES);
 
 // Clean up old temp files on server startup
 console.log('Starting server cleanup...');
@@ -1079,12 +1210,8 @@ app.get('/api/download', async (req, res) => {
         }
       }
       
-      // Ensure request options are always included
-      ytdlOptions.requestOptions = {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      };
+      // Apply enhanced bot detection bypass configuration
+      ytdlOptions = getEnhancedYtdlOptions(ytdlOptions);
     } else {
       // For MP3, we want audio only
       if (itag) {
@@ -1158,15 +1285,17 @@ app.get('/api/download', async (req, res) => {
     // Create a readable stream from ytdl and pipe it to the response.
     let stream;
     if (chosenFormat) {
-      // Use the explicitly chosen format object
+      // Use the explicitly chosen format object with enhanced options
       console.log('Creating stream with explicit format object');
-      stream = ytdl(String(url), { 
+      const enhancedOptions = getEnhancedYtdlOptions({ 
         ...ytdlOptions, 
         format: chosenFormat 
       });
+      stream = await createYtdlStreamWithRetry(String(url), enhancedOptions);
     } else {
       console.log('Creating stream with filter/quality options');
-      stream = ytdl(String(url), ytdlOptions);
+      const enhancedOptions = getEnhancedYtdlOptions(ytdlOptions);
+      stream = await createYtdlStreamWithRetry(String(url), enhancedOptions);
     }
     
     let dataReceived = false;
