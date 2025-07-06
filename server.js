@@ -157,6 +157,108 @@ async function createYtdlStreamWithRetry(url, options, maxRetries = 3) {
   }
 }
 
+// Enhanced function to get video info with multiple bypass strategies
+async function getVideoInfoWithRetry(url, maxRetries = 5) {
+  // Try different extraction strategies
+  const strategies = [
+    { name: 'WEB_EMBEDDED', options: { clientName: 'WEB_EMBEDDED', clientVersion: '1.20231201.01.00' } },
+    { name: 'ANDROID', options: { clientName: 'ANDROID', clientVersion: '17.31.35' } },
+    { name: 'IOS', options: { clientName: 'IOS', clientVersion: '17.33.2' } },
+    { name: 'TVHTML5_SIMPLY_EMBEDDED', options: { clientName: 'TVHTML5_SIMPLY_EMBEDDED', clientVersion: '2.0' } },
+    { name: 'WEB_CREATOR', options: { clientName: 'WEB_CREATOR', clientVersion: '1.20231201.01.00' } }
+  ];
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Attempt ${attempt}/${maxRetries} to get video info for:`, url);
+      
+      // Add progressive delay between attempts
+      if (attempt > 1) {
+        const delay = Math.floor(Math.random() * 3000) + (attempt * 1000); // Progressive delay
+        console.log(`Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      // Rotate User-Agent and strategies
+      const userAgents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+        'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+      ];
+      
+      const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
+      const currentStrategy = strategies[(attempt - 1) % strategies.length];
+      
+      console.log(`Using strategy: ${currentStrategy.name}`);
+      console.log(`Using User-Agent: ${randomUA.substring(0, 50)}...`);
+      
+      const enhancedOptions = {
+        ...getEnhancedYtdlOptions(),
+        ...currentStrategy.options,
+        requestOptions: {
+          ...getEnhancedRequestOptions(),
+          headers: {
+            ...getEnhancedRequestOptions().headers,
+            'User-Agent': randomUA,
+            // Add randomized headers
+            'X-Forwarded-For': `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+            'X-Real-IP': `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+            // Add more realistic headers
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none'
+          },
+          timeout: 30000,
+          maxRedirects: 10
+        },
+        // Additional bypass options
+        bypassAgeGate: true,
+        includeHLSManifest: false,
+        includeDashManifest: false
+      };
+      
+      // Try to get video info
+      const info = await ytdl.getInfo(url, enhancedOptions);
+      console.log(`Successfully got video info on attempt ${attempt} using ${currentStrategy.name}`);
+      return info;
+      
+    } catch (error) {
+      console.error(`Attempt ${attempt} failed:`, error.message);
+      
+      // Check if it's a bot detection or server error
+      if (error.message.includes('Sign in to confirm') || 
+          error.message.includes('bot') || 
+          error.message.includes('403') ||
+          error.message.includes('429') ||
+          error.message.includes('500') ||
+          error.message.includes('UnrecoverableError') ||
+          error.message.includes('Video unavailable')) {
+        console.log(`Bot detection/server error detected on attempt ${attempt}:`, error.message);
+        console.log('Implementing additional bypass measures for next attempt...');
+        // Continue to next attempt with different configuration
+      } else {
+        // For other errors, throw immediately
+        console.error('Non-bot detection error:', error.message);
+        throw error;
+      }
+      
+      // If this was the last attempt, throw the error
+      if (attempt === maxRetries) {
+        throw new Error(`Failed after ${maxRetries} attempts. Last error: ${error.message}`);
+      }
+    }
+  }
+}
 
 // Function to check if FFmpeg is available
 async function checkFFmpegAvailability() {
@@ -650,6 +752,10 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const PROXY_URL = process.env.PROXY_URL; // Optional: http://username:password@proxy-server:port
 const USE_IPV6 = process.env.USE_IPV6 === 'true';
 const ENABLE_COOKIES = process.env.ENABLE_COOKIES !== 'false'; // Default to true
+const YTDL_NO_UPDATE = process.env.YTDL_NO_UPDATE || 'true'; // Disable update checks to avoid 403
+
+// Set environment variable to disable ytdl-core update checks
+process.env.YTDL_NO_UPDATE = YTDL_NO_UPDATE;
 
 console.log('🔧 Server Configuration:');
 console.log('- Port:', PORT);
@@ -658,6 +764,7 @@ console.log('- Environment:', process.env.NODE_ENV || 'development');
 console.log('- Proxy URL:', PROXY_URL ? '[CONFIGURED]' : '[NOT SET]');
 console.log('- IPv6 Support:', USE_IPV6);
 console.log('- Cookies Enabled:', ENABLE_COOKIES);
+console.log('- YTDL Update Check Disabled:', YTDL_NO_UPDATE);
 
 // Clean up old temp files on server startup
 console.log('Starting server cleanup...');
@@ -835,7 +942,7 @@ app.get('/api/info', async (req, res) => {
 
   try {
     console.log('Getting video info for:', url);
-    const info = await ytdl.getInfo(String(url));
+    const info = await getVideoInfoWithRetry(String(url));
     const title = info.videoDetails.title;
     const thumbnail = info.videoDetails.thumbnails[info.videoDetails.thumbnails.length - 1]?.url || '';
     console.log('Video title:', title);
@@ -981,7 +1088,7 @@ app.head('/api/download', async (req, res) => {
 
   try {
     // Get video info to check if FFmpeg merge will be needed
-    const info = await ytdl.getInfo(String(url));
+    const info = await getVideoInfoWithRetry(String(url));
     const availableFormats = info.formats;
     
     // Check if this will require FFmpeg merge
