@@ -25,7 +25,9 @@ npm install
 
 ## Environment Variables
 
-- `PORT` - Server port (default: 4000)
+- `PORT` - Server port (default: 4000, automatically set by Render.com)
+- `FRONTEND_URL` - Frontend application URL for CORS (default: http://localhost:5173)
+- `NODE_ENV` - Environment mode (recommended: production for deployment)
 
 ## Local Development
 
@@ -68,8 +70,10 @@ Get download progress for a specific download.
    - **Environment:** Node
    - **Node Version:** 18 or higher
 
-4. **Environment Variables:**
-   - No additional environment variables required (PORT is automatically set by Render)
+4. **Set Environment Variables:**
+   - `FRONTEND_URL`: Your frontend deployment URL (e.g., `https://yourapp.netlify.app`)
+   - `NODE_ENV`: `production`
+   - `PORT`: Automatically provided by Render.com
 
 5. **Deploy** - Render will automatically build and deploy your service
 

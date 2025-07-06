@@ -510,6 +510,7 @@ function cleanupAfterDownload(downloadId, tempFiles = []) {
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // Clean up old temp files on server startup
 console.log('Starting server cleanup...');
@@ -528,7 +529,7 @@ app.use((req, res, next) => {
 
 // Progress tracking endpoint
 app.get('/api/progress/:downloadId', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+  res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   res.setHeader('Content-Type', 'application/json');
   
   const { downloadId } = req.params;
@@ -549,7 +550,7 @@ app.get('/api/progress/:downloadId', (req, res) => {
 
 // FFmpeg file download endpoint
 app.get('/api/download-file/:downloadId', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+  res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   
   const { downloadId } = req.params;
   const progress = downloadProgress.get(downloadId);
@@ -652,7 +653,7 @@ app.get('/api/download-file/:downloadId', (req, res) => {
 
 // Explicit CORS configuration
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: FRONTEND_URL,
   methods: ['GET', 'POST', 'OPTIONS', 'HEAD'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Download-ID', 'x-download-id'],
   exposedHeaders: ['X-Download-ID'],
@@ -661,7 +662,7 @@ app.use(cors({
 
 // Handle preflight requests explicitly
 app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:5173');
+  res.header('Access-Control-Allow-Origin', FRONTEND_URL);
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Download-ID, x-download-id');
   res.header('Access-Control-Expose-Headers', 'X-Download-ID');
@@ -673,7 +674,7 @@ app.get('/api/info', async (req, res) => {
   console.log('Info endpoint hit with URL:', req.query.url);
   
   // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+  res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Content-Type', 'application/json');
@@ -800,7 +801,7 @@ app.options('/api/download', (req, res) => {
   console.log('OPTIONS request to download endpoint');
   
   // Set CORS headers for preflight
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+  res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Download-ID, x-download-id');
   res.setHeader('Access-Control-Expose-Headers', 'X-Download-ID');
@@ -816,7 +817,7 @@ app.head('/api/download', async (req, res) => {
   console.log('HEAD request to download endpoint with URL:', req.query.url);
   
   // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+  res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Download-ID, x-download-id');
   res.setHeader('Access-Control-Expose-Headers', 'X-Download-ID');
@@ -868,7 +869,7 @@ app.get('/api/download', async (req, res) => {
   console.log('Download endpoint hit with URL:', req.query.url);
   
   // Set CORS headers IMMEDIATELY before any processing
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+  res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Download-ID, x-download-id');
   res.setHeader('Access-Control-Expose-Headers', 'X-Download-ID');
