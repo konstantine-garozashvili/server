@@ -31,7 +31,10 @@ function getEnhancedRequestOptions() {
       'Cache-Control': 'max-age=0',
       'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
       'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Windows"'
+      'sec-ch-ua-platform': '"Windows"',
+      // Add additional headers for better bot detection bypass
+      'Referer': 'https://www.youtube.com/',
+      'Origin': 'https://www.youtube.com'
     },
     // Add timeout and retry configurations
     timeout: 30000,
@@ -79,6 +82,8 @@ function getEnhancedYtdlOptions(baseOptions = {}) {
     },
     // Add format selection options
     lang: 'en',
+    // Use alternative player clients to bypass bot detection
+    playerClients: ['WEB_EMBEDDED', 'ANDROID', 'IOS'],
     // Disable signature verification that might trigger bot detection
     disableDefaultUA: false
   };
@@ -97,12 +102,15 @@ async function createYtdlStreamWithRetry(url, options, maxRetries = 3) {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
       
-      // Rotate User-Agent for each retry
+      // Rotate User-Agent for each retry with more diverse options
       const userAgents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0'
       ];
       
       const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
@@ -112,9 +120,14 @@ async function createYtdlStreamWithRetry(url, options, maxRetries = 3) {
           ...options.requestOptions,
           headers: {
             ...options.requestOptions.headers,
-            'User-Agent': randomUA
+            'User-Agent': randomUA,
+            // Add randomized additional headers for each retry
+            'X-Forwarded-For': `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+            'X-Real-IP': `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`
           }
-        }
+        },
+        // Rotate player clients for each attempt
+        playerClients: attempt === 1 ? ['WEB_EMBEDDED'] : attempt === 2 ? ['ANDROID'] : ['IOS', 'WEB']
       };
       
       return ytdl(String(url), enhancedOptions);
@@ -130,11 +143,14 @@ async function createYtdlStreamWithRetry(url, options, maxRetries = 3) {
       if (error.message.includes('Sign in to confirm') || 
           error.message.includes('bot') || 
           error.message.includes('403') ||
-          error.message.includes('429')) {
-        console.log('Bot detection error detected, implementing additional bypass measures...');
+          error.message.includes('429') ||
+          error.message.includes('UnrecoverableError')) {
+        console.log(`Bot detection error detected on attempt ${attempt}:`, error.message);
+        console.log('Implementing additional bypass measures for next attempt...');
         // Continue to next attempt with different configuration
       } else {
         // For other errors, throw immediately
+        console.error('Non-bot detection error:', error.message);
         throw error;
       }
     }
